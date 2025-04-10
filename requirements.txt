@@ -1,6 +1,7 @@
-jira==3.5.1
-plotly==5.18.0
-pandas==2.1.4
-python-dotenv==1.0.0
 requests==2.31.0
-tqdm==4.66.1
+pandas==2.2.1
+plotly==5.19.0
+jira==3.6.0
+python-dotenv==1.0.1
+numpy==1.26.4
+kaleido==0.2.1  # For static image export with plotly

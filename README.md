@@ -1,109 +1,86 @@
 # Jira Test Cycle Percentage Tracker
 
-A Python script to track and visualize test cycle completion percentages from Jira. This tool helps teams monitor their testing progress by generating daily reports with completion percentages and trends.
+This Python script tracks and reports on Jira test cycle completion percentages. It generates daily reports and visualizations to help track testing progress over time.
 
 ## Features
 
-- Connect to Jira using API authentication
-- Retrieve test cycles based on configurable JQL
-- Calculate completion percentages for test cycles
-- Generate HTML reports with interactive charts using Plotly
-- Export data to CSV files (optional)
-- Configurable settings via JSON configuration file
+- Retrieves test cycles from Jira
+- Calculates completion percentages based on test case status
+- Generates CSV reports with detailed statistics
+- Creates interactive HTML visualizations using Plotly
+- Tracks historical data over configurable time periods
 
 ## Prerequisites
 
-- Python 3.7 or higher
+- Python 3.8 or higher
 - Jira account with API access
-- Required Python packages (install via pip):
-  - requests
-  - pandas
-  - plotly
-  - jira
+- Required Python packages (see requirements.txt)
 
-## Installation
+## Setup
 
 1. Clone the repository:
-```bash
-git clone https://github.com/kishanatoffice/jira-testcycle-daily-percentage.git
-cd jira-testcycle-daily-percentage
-```
+   ```bash
+   git clone https://github.com/kishanatoffice/jira-testcycle-daily-percentage.git
+   cd jira-testcycle-daily-percentage
+   ```
 
-2. Install required packages:
-```bash
-pip install -r requirements.txt
-```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-3. Create a local configuration file:
-```bash
-cp config.json config.local.json
-```
+3. Create a `.env` file:
+   ```bash
+   cp .env.example .env
+   ```
 
-4. Edit `config.local.json` with your Jira credentials and settings:
-```json
-{
-    "jira": {
-        "server": "https://your-jira-instance.com",
-        "email": "your.email@company.com",
-        "api_token": "your-api-token",
-        "test_cycle_jql": "project = 'Your Project' AND issuetype = 'Test Cycle'"
-    },
-    "reporting": {
-        "output_dir": "reports",
-        "save_csv": true
-    }
-}
-```
+4. Configure your Jira credentials in the `.env` file:
+   - `JIRA_URL`: Your Jira instance URL
+   - `JIRA_TOKEN`: Your Jira API token
+   - `JIRA_PROJECT_KEY`: Your Jira project key
 
 ## Usage
 
 Run the script:
 ```bash
-python main.py
+python jira_testcycle_tracker.py
 ```
 
 The script will:
 1. Connect to your Jira instance
-2. Retrieve test cycles based on the configured JQL
+2. Retrieve test cycles from the last 7 days
 3. Calculate completion percentages
-4. Generate an HTML report with interactive charts
-5. Save data to CSV if enabled in configuration
+4. Generate reports in the `reports` directory:
+   - CSV report with detailed statistics
+   - HTML visualization of completion trends
 
 ## Output
 
-- HTML reports are generated in the configured output directory
-- Reports include:
-  - Daily completion percentages for each test cycle
-  - Trend analysis over time
-  - Interactive charts for data visualization
-- Optional CSV export of raw data
+The script generates two types of reports:
+1. CSV Reports (`reports/testcycle_report_YYYY-MM-DD.csv`):
+   - Test cycle details
+   - Completion percentages
+   - Test case counts
+   - Status breakdown
 
-## Configuration Options
+2. HTML Visualizations (`reports/testcycle_visualization_YYYY-MM-DD.html`):
+   - Interactive completion trend charts
+   - Daily progress visualization
+   - Status distribution plots
 
-### Jira Settings
-- `server`: Your Jira instance URL
-- `email`: Your Jira account email
-- `api_token`: Your Jira API token
-- `test_cycle_jql`: JQL query to identify test cycles
+## Configuration
 
-### Reporting Settings
-- `output_dir`: Directory for generated reports
-- `save_csv`: Enable/disable CSV export
+Optional environment variables in `.env`:
+- `DAYS_TO_TRACK`: Number of days to look back (default: 7)
 
-## Security Notes
+## Error Handling
 
-- Never commit `config.local.json` with your credentials
-- Use environment variables for sensitive data in production
-- Keep your API token secure
+The script includes comprehensive error handling for:
+- Jira connection issues
+- Missing environment variables
+- Invalid data formats
+- File I/O operations
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
+Feel free to submit issues and enhancement requests!

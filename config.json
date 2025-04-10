@@ -1,22 +1,14 @@
 {
-  "jira": {
-    "baseUrl": "https://your-jira-instance.atlassian.net",
-    "email": "your-email@example.com",
-    "apiToken": "",
-    "project": "YOUR_PROJECT_KEY",
-    "testCycleField": "customfield_xxxxx"
-  },
-  "reporting": {
-    "outputPath": "./reports",
-    "dateFormat": "YYYY-MM-DD",
-    "updateFrequency": "daily"
-  },
-  "visualization": {
-    "chartType": "line",
-    "showGrid": true,
-    "colors": {
-      "primary": "#4CAF50",
-      "secondary": "#2196F3"
+    "jira": {
+        "server": "https://your-domain.atlassian.net",
+        "email": "your-email@example.com",
+        "api_token": "your-api-token",
+        "project_key": "YOUR_PROJECT",
+        "test_cycle_jql": "project = YOUR_PROJECT AND issuetype = 'Test Cycle'",
+        "max_results": 50
+    },
+    "reporting": {
+        "output_directory": "reports",
+        "save_csv": true
     }
-  }
 }

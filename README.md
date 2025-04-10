@@ -1,43 +1,54 @@
-# Jira Test Cycle Percentage Tracker
+# Jira Test Cycle Tracker
 
-This Python script tracks and reports on Jira test cycle completion percentages. It generates daily reports and visualizations to help track testing progress over time.
+This tool tracks and analyzes test cycle completion percentages in Jira, generating daily reports and visualizations.
 
 ## Features
 
-- Retrieves test cycles from Jira
-- Calculates completion percentages based on test case status
+- Retrieves test cycle information from Jira
+- Calculates daily completion percentages
 - Generates CSV reports with detailed statistics
-- Creates interactive HTML visualizations using Plotly
-- Tracks historical data over configurable time periods
+- Creates interactive HTML visualizations
+- Tracks historical test cycle progress
 
 ## Prerequisites
 
 - Python 3.8 or higher
 - Jira account with API access
-- Required Python packages (see requirements.txt)
+- API token from Jira
 
-## Setup
+## Installation
 
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/kishanatoffice/jira-testcycle-daily-percentage.git
-   cd jira-testcycle-daily-percentage
-   ```
+```bash
+git clone https://github.com/kishanatoffice/jira-testcycle-daily-percentage.git
+cd jira-testcycle-daily-percentage
+```
 
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+2. Create and activate a virtual environment:
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows, use: venv\Scripts\activate
+```
 
-3. Create a `.env` file:
-   ```bash
-   cp .env.example .env
-   ```
+3. Install required packages:
+```bash
+pip install -r requirements.txt
+```
 
-4. Configure your Jira credentials in the `.env` file:
-   - `JIRA_URL`: Your Jira instance URL
-   - `JIRA_TOKEN`: Your Jira API token
-   - `JIRA_PROJECT_KEY`: Your Jira project key
+## Configuration
+
+1. Copy the `.env.example` file to `.env`:
+```bash
+cp .env.example .env
+```
+
+2. Edit the `.env` file with your Jira credentials and settings:
+```
+JIRA_URL=https://your-domain.atlassian.net
+JIRA_TOKEN=your_jira_api_token
+JIRA_PROJECT_KEY=YOUR_PROJECT
+DAYS_TO_TRACK=7
+```
 
 ## Usage
 
@@ -48,39 +59,32 @@ python jira_testcycle_tracker.py
 
 The script will:
 1. Connect to your Jira instance
-2. Retrieve test cycles from the last 7 days
+2. Retrieve test cycle data
 3. Calculate completion percentages
-4. Generate reports in the `reports` directory:
-   - CSV report with detailed statistics
-   - HTML visualization of completion trends
+4. Generate reports in the `output` directory:
+   - `test_cycle_report.csv`: Detailed statistics in CSV format
+   - `test_cycle_visualization.html`: Interactive visualization
+   - `test_cycle_trend.png`: Static trend chart
 
-## Output
+## Output Directory Structure
 
-The script generates two types of reports:
-1. CSV Reports (`reports/testcycle_report_YYYY-MM-DD.csv`):
-   - Test cycle details
-   - Completion percentages
-   - Test case counts
-   - Status breakdown
+```
+output/
+├── test_cycle_report.csv
+├── test_cycle_visualization.html
+└── test_cycle_trend.png
+```
 
-2. HTML Visualizations (`reports/testcycle_visualization_YYYY-MM-DD.html`):
-   - Interactive completion trend charts
-   - Daily progress visualization
-   - Status distribution plots
+## Security Notes
 
-## Configuration
-
-Optional environment variables in `.env`:
-- `DAYS_TO_TRACK`: Number of days to look back (default: 7)
-
-## Error Handling
-
-The script includes comprehensive error handling for:
-- Jira connection issues
-- Missing environment variables
-- Invalid data formats
-- File I/O operations
+- Never commit your `.env` file or any files containing sensitive credentials
+- Use environment variables for sensitive information
+- Keep your API tokens secure
 
 ## Contributing
 
-Feel free to submit issues and enhancement requests!
+Feel free to open issues or submit pull requests for improvements.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

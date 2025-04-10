@@ -1,199 +1,269 @@
 #!/usr/bin/env python3
-"""
-Jira Test Cycle Percentage Tracker
-This script connects to Jira, retrieves test cycles, and calculates completion percentages.
-"""
-
 import os
 import sys
-import json
 from datetime import datetime, timedelta
+import json
+import logging
+from pathlib import Path
 import pandas as pd
 import plotly.graph_objects as go
-from jira import JIRA
+from plotly.subplots import make_subplots
+import requests
 from dotenv import load_dotenv
-import numpy as np
 
-# Load environment variables
-load_dotenv()
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 class JiraTestCycleTracker:
     def __init__(self):
-        """Initialize the Jira connection and configuration."""
+        """Initialize the Jira Test Cycle Tracker with configuration from environment variables."""
+        self._load_config()
+        self._setup_jira_session()
+        self._ensure_reports_directory()
+
+    def _load_config(self):
+        """Load configuration from environment variables."""
+        load_dotenv()
+        
+        # Required configuration
         self.jira_url = os.getenv('JIRA_URL')
         self.jira_token = os.getenv('JIRA_TOKEN')
         self.project_key = os.getenv('JIRA_PROJECT_KEY')
         
+        # Optional configuration
+        self.days_to_track = int(os.getenv('DAYS_TO_TRACK', '7'))
+        
         if not all([self.jira_url, self.jira_token, self.project_key]):
-            print("Error: Missing required environment variables.")
-            sys.exit(1)
-            
-        try:
-            self.jira = JIRA(
-                server=self.jira_url,
-                token_auth=self.jira_token
-            )
-        except Exception as e:
-            print(f"Error connecting to Jira: {str(e)}")
-            sys.exit(1)
+            raise ValueError("Missing required environment variables. Please check .env file.")
 
-    def get_test_cycles(self, days_back=7):
+    def _setup_jira_session(self):
+        """Set up the Jira session with authentication."""
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Authorization': f'Bearer {self.jira_token}',
+            'Content-Type': 'application/json'
+        })
+
+    def _ensure_reports_directory(self):
+        """Create reports directory if it doesn't exist."""
+        self.reports_dir = Path('reports')
+        self.reports_dir.mkdir(exist_ok=True)
+
+    def get_test_cycles(self, days=None):
         """
-        Retrieve test cycles from the specified date range.
+        Retrieve test cycles from Jira for the specified number of days.
         
         Args:
-            days_back (int): Number of days to look back for test cycles
+            days (int): Number of days to look back (default: self.days_to_track)
             
         Returns:
-            list: List of test cycles with their details
+            list: List of test cycles
         """
-        start_date = (datetime.now() - timedelta(days=days_back)).strftime('%Y-%m-%d')
-        jql_query = f'project = {self.project_key} AND issuetype = "Test Cycle" AND created >= "{start_date}" ORDER BY created DESC'
+        days = days or self.days_to_track
+        start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
         
         try:
-            test_cycles = self.jira.search_issues(jql_query, maxResults=50)
-            return test_cycles
-        except Exception as e:
-            print(f"Error retrieving test cycles: {str(e)}")
+            url = f"{self.jira_url}/rest/api/3/search"
+            jql = (
+                f'project = {self.project_key} '
+                f'AND created >= "{start_date}" '
+                'AND type = "Test Cycle"'
+            )
+            
+            response = self.session.get(
+                url,
+                params={
+                    'jql': jql,
+                    'fields': 'key,summary,created,status,customfield_10016'  # Add relevant fields
+                }
+            )
+            response.raise_for_status()
+            
+            return response.json()['issues']
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error retrieving test cycles: {e}")
             return []
 
     def calculate_completion_percentage(self, test_cycle):
         """
-        Calculate the completion percentage for a test cycle.
+        Calculate completion percentage for a test cycle.
         
         Args:
-            test_cycle: Jira issue object representing a test cycle
+            test_cycle (dict): Test cycle data from Jira
             
         Returns:
-            float: Completion percentage
+            dict: Completion statistics
         """
         try:
-            total_tests = 0
-            completed_tests = 0
+            # Get test cases for the cycle
+            url = f"{self.jira_url}/rest/api/3/search"
+            jql = f'parent = {test_cycle["key"]}'
             
-            # Get all test cases linked to this cycle
-            links = test_cycle.fields.issuelinks
-            for link in links:
-                if hasattr(link, 'outwardIssue') and link.outwardIssue.fields.issuetype.name == 'Test Case':
-                    total_tests += 1
-                    status = link.outwardIssue.fields.status.name
-                    if status in ['Done', 'Closed', 'Passed']:
-                        completed_tests += 1
+            response = self.session.get(
+                url,
+                params={
+                    'jql': jql,
+                    'fields': 'status'
+                }
+            )
+            response.raise_for_status()
             
-            return (completed_tests / total_tests * 100) if total_tests > 0 else 0
-        except Exception as e:
-            print(f"Error calculating completion percentage: {str(e)}")
-            return 0
+            test_cases = response.json()['issues']
+            total_cases = len(test_cases)
+            
+            if total_cases == 0:
+                return {
+                    'cycle_key': test_cycle['key'],
+                    'total_cases': 0,
+                    'completed_cases': 0,
+                    'completion_percentage': 0,
+                    'status_breakdown': {}
+                }
+            
+            # Count cases by status
+            status_counts = {}
+            completed_cases = 0
+            
+            for case in test_cases:
+                status = case['fields']['status']['name']
+                status_counts[status] = status_counts.get(status, 0) + 1
+                
+                # Consider 'Done' and 'Passed' as completed statuses
+                if status.lower() in ['done', 'passed']:
+                    completed_cases += 1
+            
+            completion_percentage = (completed_cases / total_cases) * 100
+            
+            return {
+                'cycle_key': test_cycle['key'],
+                'total_cases': total_cases,
+                'completed_cases': completed_cases,
+                'completion_percentage': round(completion_percentage, 2),
+                'status_breakdown': status_counts
+            }
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error calculating completion for {test_cycle['key']}: {e}")
+            return None
 
-    def generate_report(self, days_back=7):
+    def generate_reports(self):
+        """Generate CSV and HTML reports for test cycle completion statistics."""
+        logger.info("Generating reports...")
+        
+        # Get test cycles
+        test_cycles = self.get_test_cycles()
+        if not test_cycles:
+            logger.warning("No test cycles found for the specified period.")
+            return
+        
+        # Calculate completion statistics
+        stats = []
+        for cycle in test_cycles:
+            cycle_stats = self.calculate_completion_percentage(cycle)
+            if cycle_stats:
+                stats.append({
+                    'Date': datetime.fromisoformat(cycle['fields']['created'].split('T')[0]),
+                    'Cycle': cycle['key'],
+                    'Summary': cycle['fields']['summary'],
+                    'Total Cases': cycle_stats['total_cases'],
+                    'Completed Cases': cycle_stats['completed_cases'],
+                    'Completion %': cycle_stats['completion_percentage'],
+                    'Status Breakdown': json.dumps(cycle_stats['status_breakdown'])
+                })
+        
+        if not stats:
+            logger.warning("No statistics to report.")
+            return
+        
+        # Create DataFrame
+        df = pd.DataFrame(stats)
+        
+        # Generate CSV report
+        csv_path = self.reports_dir / f'testcycle_report_{datetime.now().strftime("%Y-%m-%d")}.csv'
+        df.to_csv(csv_path, index=False)
+        logger.info(f"CSV report generated: {csv_path}")
+        
+        # Generate visualization
+        self._create_visualization(df)
+
+    def _create_visualization(self, df):
         """
-        Generate a report of test cycle completion percentages.
+        Create an interactive visualization using Plotly.
         
         Args:
-            days_back (int): Number of days to include in the report
-            
-        Returns:
-            tuple: (DataFrame with report data, HTML string of the plot)
+            df (pandas.DataFrame): Test cycle statistics
         """
-        test_cycles = self.get_test_cycles(days_back)
-        
-        data = []
-        for cycle in test_cycles:
-            completion_percentage = self.calculate_completion_percentage(cycle)
-            data.append({
-                'Test Cycle': cycle.fields.summary,
-                'Created Date': cycle.fields.created,
-                'Status': cycle.fields.status.name,
-                'Completion Percentage': completion_percentage
-            })
-        
-        if not data:
-            return None, None
-        
-        df = pd.DataFrame(data)
-        df['Created Date'] = pd.to_datetime(df['Created Date'])
-        df = df.sort_values('Created Date')
-        
-        # Create visualization
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=df['Created Date'],
-            y=df['Completion Percentage'],
-            mode='lines+markers',
-            name='Completion %',
-            line=dict(color='#2E86C1', width=2),
-            marker=dict(size=8)
-        ))
-        
-        fig.update_layout(
-            title='Test Cycle Completion Percentages Over Time',
-            xaxis_title='Date',
-            yaxis_title='Completion Percentage (%)',
-            template='plotly_white',
-            hovermode='x unified'
+        # Create subplots
+        fig = make_subplots(
+            rows=2, cols=1,
+            subplot_titles=('Test Cycle Completion Trend', 'Daily Progress'),
+            vertical_spacing=0.2
         )
         
-        # Save plot as HTML and image
-        plot_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
-        fig.write_image("test_cycle_trend.png")
+        # Completion trend
+        fig.add_trace(
+            go.Scatter(
+                x=df['Date'],
+                y=df['Completion %'],
+                mode='lines+markers',
+                name='Completion %'
+            ),
+            row=1, col=1
+        )
         
-        return df, plot_html
-
-    def save_report(self, df, plot_html):
-        """
-        Save the report to files.
+        # Daily progress
+        daily_stats = df.groupby('Date').agg({
+            'Total Cases': 'sum',
+            'Completed Cases': 'sum'
+        }).reset_index()
         
-        Args:
-            df (DataFrame): Report data
-            plot_html (str): HTML string of the plot
-        """
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        fig.add_trace(
+            go.Bar(
+                x=daily_stats['Date'],
+                y=daily_stats['Total Cases'],
+                name='Total Cases',
+                marker_color='lightgray'
+            ),
+            row=2, col=1
+        )
         
-        # Save DataFrame to CSV
-        csv_filename = f'test_cycle_report_{timestamp}.csv'
-        df.to_csv(csv_filename, index=False)
+        fig.add_trace(
+            go.Bar(
+                x=daily_stats['Date'],
+                y=daily_stats['Completed Cases'],
+                name='Completed Cases',
+                marker_color='green'
+            ),
+            row=2, col=1
+        )
         
-        # Save plot HTML
-        html_filename = f'test_cycle_report_{timestamp}.html'
-        with open(html_filename, 'w') as f:
-            f.write(f"""
-            <html>
-            <head>
-                <title>Test Cycle Completion Report</title>
-                <style>
-                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
-                    h1 {{ color: #2E86C1; }}
-                    .container {{ max-width: 1200px; margin: 0 auto; }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1>Test Cycle Completion Report</h1>
-                    <p>Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-                    {plot_html}
-                </div>
-            </body>
-            </html>
-            """)
+        # Update layout
+        fig.update_layout(
+            title_text='Test Cycle Progress Report',
+            showlegend=True,
+            height=800
+        )
+        
+        # Save visualization
+        html_path = self.reports_dir / f'testcycle_visualization_{datetime.now().strftime("%Y-%m-%d")}.html'
+        fig.write_html(str(html_path))
+        logger.info(f"HTML visualization generated: {html_path}")
 
 def main():
-    """Main function to run the Jira test cycle tracker."""
-    tracker = JiraTestCycleTracker()
-    
+    """Main function to run the Jira Test Cycle Tracker."""
     try:
-        print("Generating test cycle report...")
-        df, plot_html = tracker.generate_report()
+        tracker = JiraTestCycleTracker()
+        tracker.generate_reports()
+        logger.info("Report generation completed successfully.")
         
-        if df is not None and plot_html is not None:
-            tracker.save_report(df, plot_html)
-            print("Report generated successfully!")
-            print(f"Average completion percentage: {df['Completion Percentage'].mean():.2f}%")
-        else:
-            print("No test cycles found in the specified date range.")
-            
     except Exception as e:
-        print(f"Error generating report: {str(e)}")
+        logger.error(f"An error occurred: {e}")
         sys.exit(1)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
